@@ -9,6 +9,17 @@ import bisect
 import torchvision
 import PIL
 
+
+def pad_or_truncate(self, data, target_length):
+    if data.shape[1] > target_length:
+        return data[:, :target_length]
+    elif data.shape[1] < target_length:
+        pad_width = ((0, 0), (0, target_length - data.shape[1]))
+        return np.pad(data, pad_width, mode='constant')
+    else:
+        return data
+
+
 def cut_data(data, out_length):
     if out_length is not None:
         if data.shape[0] > out_length:
@@ -112,6 +123,7 @@ class CQT(Dataset):
             data = transform_train(data)
         else:
             data = transform_test(data)
+        data = self.pad_or_truncate(data, 400) ################################################################
         return data, int(set_id)
     def __len__(self):
         return len(self.file_list)
