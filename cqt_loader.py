@@ -26,19 +26,28 @@ class CQT(Dataset):
             self.file_list = [line.rstrip() for line in fp]
         self.out_length = out_length
 
-    def pad_or_truncate(self, data, target_length):
+    def pad_or_truncate(self, data, target_length, target_freq=84):
         # Ensure data is 3D: (channels, frequency, time)
         if data.ndim == 2:
             data = data.unsqueeze(0)  # Add channel dimension
         
-        current_length = data.shape[2]  # Time is the last dimension
+        _, freq, current_length = data.shape
+        
+        # Pad or truncate frequency dimension
+        if freq > target_freq:
+            data = data[:, :target_freq, :]
+        elif freq < target_freq:
+            pad_freq = target_freq - freq
+            data = F.pad(data, (0, 0, 0, pad_freq), mode='constant', value=0)
+        
+        # Pad or truncate time dimension
         if current_length > target_length:
-            return data[:, :, :target_length]
+            data = data[:, :, :target_length]
         elif current_length < target_length:
-            pad_width = (0, target_length - current_length)
-            return F.pad(data, (0, pad_width[1]), mode='constant', value=0)
-        else:
-            return data
+            pad_time = target_length - current_length
+            data = F.pad(data, (0, pad_time), mode='constant', value=0)
+        
+        return data
 
     def __getitem__(self, index):
         transform_train = transforms.Compose([
@@ -69,8 +78,8 @@ class CQT(Dataset):
         else:
             data = transform_test(data)
 
-        # Pad or truncate to a fixed length (e.g., 400)
-        data = self.pad_or_truncate(data, 400)
+        # Pad or truncate to a fixed length and frequency
+        data = self.pad_or_truncate(data, 400, 84)
 
         return data, int(set_id)
 
@@ -80,7 +89,7 @@ class CQT(Dataset):
     def SpecAugment(self, data):
         F = 24
         f = np.random.randint(F)
-        f0 = np.random.randint(data.shape[0] - f)
+        f0 = np.random.randint(84 - f)
         data[f0:f0 + f, :] *= 0
         return data
 
@@ -89,7 +98,7 @@ class CQT(Dataset):
         maxx = np.max(data) + 1
         data0 = PIL.Image.fromarray((data * 255.0 / maxx).astype(np.uint8))
         transform = transforms.Compose([
-            transforms.Resize(size=(data.shape[0], new_len)),
+            transforms.Resize(size=(84, new_len)),
         ])
         new_data = transform(data0)
         return np.array(new_data) / 255.0 * maxx
@@ -99,7 +108,7 @@ class CQT(Dataset):
             if data.shape[1] > out_length:
                 max_offset = data.shape[1] - out_length
                 offset = np.random.randint(max_offset)
-                data = data[:, offset:(out_length + offset)]
+                data = data[:, offset:(out_length+offset)]
             else:
                 offset = out_length - data.shape[1]
                 data = np.pad(data, ((0, 0), (0, offset)), "constant")
@@ -123,7 +132,6 @@ class CQT(Dataset):
 if __name__ == '__main__':
     train_dataset = CQT('train', 394)
     trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=128, num_workers=12, shuffle=True)
-
 
 ##############
 # import os,sys
