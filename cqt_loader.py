@@ -6,6 +6,7 @@ import librosa
 from torchvision import transforms
 import random
 import PIL
+import torch.nn.functional as F
 
 class CQT(Dataset):
     def __init__(self, mode='train', out_length=None):
@@ -26,11 +27,16 @@ class CQT(Dataset):
         self.out_length = out_length
 
     def pad_or_truncate(self, data, target_length):
-        if data.shape[1] > target_length:
-            return data[:, :target_length]
-        elif data.shape[1] < target_length:
-            pad_width = ((0, 0), (0, target_length - data.shape[1]))
-            return np.pad(data, pad_width, mode='constant')
+        # Ensure data is 3D: (channels, frequency, time)
+        if data.ndim == 2:
+            data = data.unsqueeze(0)  # Add channel dimension
+        
+        current_length = data.shape[2]  # Time is the last dimension
+        if current_length > target_length:
+            return data[:, :, :target_length]
+        elif current_length < target_length:
+            pad_width = (0, 0, 0, 0, 0, target_length - current_length)
+            return F.pad(data, pad_width, mode='constant', value=0)
         else:
             return data
 
@@ -121,7 +127,6 @@ class CQT(Dataset):
 if __name__ == '__main__':
     train_dataset = CQT('train', 394)
     trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=128, num_workers=12, shuffle=True)
-
 
 
 ##############
