@@ -108,7 +108,7 @@ class CQT(Dataset):
         in_path = self.indir+filename+'.npy'
         data = np.load(in_path) # from 12xN to Nx12
 
-        if self.mode is 'train':
+        if self.mode == 'train':
             data = transform_train(data)
         else:
             data = transform_test(data)
