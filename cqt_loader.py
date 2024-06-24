@@ -35,8 +35,8 @@ class CQT(Dataset):
         if current_length > target_length:
             return data[:, :, :target_length]
         elif current_length < target_length:
-            pad_width = (0, 0, 0, 0, 0, target_length - current_length)
-            return F.pad(data, pad_width, mode='constant', value=0)
+            pad_width = (0, target_length - current_length)
+            return F.pad(data, (0, pad_width[1]), mode='constant', value=0)
         else:
             return data
 
@@ -44,20 +44,18 @@ class CQT(Dataset):
         transform_train = transforms.Compose([
             lambda x: self.SpecAugment(x),
             lambda x: self.SpecAugment(x),
-            lambda x: x.T,
             lambda x: self.change_speed(x, 0.7, 1.3),
             lambda x: x.astype(np.float32) / (np.max(np.abs(x)) + 1e-6),
             lambda x: self.cut_data(x, self.out_length),
             lambda x: torch.Tensor(x),
-            lambda x: x.permute(1, 0).unsqueeze(0),
+            lambda x: x.unsqueeze(0),  # Add channel dimension
         ])
         
         transform_test = transforms.Compose([
-            lambda x: x.T,
             lambda x: x.astype(np.float32) / (np.max(np.abs(x)) + 1e-6),
             lambda x: self.cut_data_front(x, self.out_length),
             lambda x: torch.Tensor(x),
-            lambda x: x.permute(1, 0).unsqueeze(0),
+            lambda x: x.unsqueeze(0),  # Add channel dimension
         ])
         
         filename = self.file_list[index].strip()
@@ -82,46 +80,44 @@ class CQT(Dataset):
     def SpecAugment(self, data):
         F = 24
         f = np.random.randint(F)
-        f0 = np.random.randint(84 - f)
+        f0 = np.random.randint(data.shape[0] - f)
         data[f0:f0 + f, :] *= 0
         return data
 
-    def change_speed(self, data, l=0.7, r=1.5):
-        new_len = int(data.shape[0] * np.random.uniform(l, r))
+    def change_speed(self, data, l=0.7, r=1.3):
+        new_len = int(data.shape[1] * np.random.uniform(l, r))
         maxx = np.max(data) + 1
         data0 = PIL.Image.fromarray((data * 255.0 / maxx).astype(np.uint8))
         transform = transforms.Compose([
-            transforms.Resize(size=(new_len, data.shape[1])),
+            transforms.Resize(size=(data.shape[0], new_len)),
         ])
         new_data = transform(data0)
         return np.array(new_data) / 255.0 * maxx
 
     def cut_data(self, data, out_length):
         if out_length is not None:
-            if data.shape[0] > out_length:
-                max_offset = data.shape[0] - out_length
+            if data.shape[1] > out_length:
+                max_offset = data.shape[1] - out_length
                 offset = np.random.randint(max_offset)
-                data = data[offset:(out_length + offset), :]
+                data = data[:, offset:(out_length + offset)]
             else:
-                offset = out_length - data.shape[0]
-                data = np.pad(data, ((0, offset), (0, 0)), "constant")
-        if data.shape[0] < 200:
-            offset = 200 - data.shape[0]
-            data = np.pad(data, ((0, offset), (0, 0)), "constant")
+                offset = out_length - data.shape[1]
+                data = np.pad(data, ((0, 0), (0, offset)), "constant")
+        if data.shape[1] < 200:
+            offset = 200 - data.shape[1]
+            data = np.pad(data, ((0, 0), (0, offset)), "constant")
         return data
 
     def cut_data_front(self, data, out_length):
         if out_length is not None:
-            if data.shape[0] > out_length:
-                max_offset = data.shape[0] - out_length
-                offset = 0
-                data = data[offset:(out_length + offset), :]
+            if data.shape[1] > out_length:
+                data = data[:, :out_length]
             else:
-                offset = out_length - data.shape[0]
-                data = np.pad(data, ((0, offset), (0, 0)), "constant")
-        if data.shape[0] < 200:
-            offset = 200 - data.shape[0]
-            data = np.pad(data, ((0, offset), (0, 0)), "constant")
+                offset = out_length - data.shape[1]
+                data = np.pad(data, ((0, 0), (0, offset)), "constant")
+        if data.shape[1] < 200:
+            offset = 200 - data.shape[1]
+            data = np.pad(data, ((0, 0), (0, offset)), "constant")
         return data
 
 if __name__ == '__main__':
