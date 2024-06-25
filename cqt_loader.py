@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 class CQT(Dataset):
     def __init__(self, mode='train', out_length=None):
-        self.indir = '/home/vaibhavraibole2000/projectData/youtube_hpcp_npy/'
+        self.indir = '/content/projectData/youtube_hpcp_npy/'
         self.mode = mode
         if mode == 'train': 
             filepath = 'data/SHS100K-TRAIN_6'
